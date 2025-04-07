@@ -1,10 +1,37 @@
+'use client'
 
-import { useRef } from 'react'
+import React, { useRef, useEffect, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { JobPlanet } from './job-planet'
 import { Sun } from './sun'
-import { SkillsAsteroidBelt } from './skills-asteroid-belt'
-import { AchievementComets } from './achievement-comets'
+import * as THREE from 'three'
+import { MeshLine, MeshLineMaterial } from 'three.meshline'
+import { extend, useThree } from '@react-three/fiber'
+
+// Extend Three.js with MeshLine components
+extend({ MeshLine, MeshLineMaterial })
+
+// Add types for the MeshLine components
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      meshLine: React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
+        ref?: React.RefObject<any>
+      }
+      meshLineMaterial: React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
+        ref?: React.RefObject<any>
+        transparent?: boolean
+        depthTest?: boolean
+        lineWidth?: number
+        color?: any
+        opacity?: number
+        dashArray?: number
+        dashOffset?: number
+        dashRatio?: number
+      }
+    }
+  }
+}
 
 const languageColors = {
   JavaScript: '#f7df1e',
@@ -174,41 +201,103 @@ const jobData = [
 
 export function CosmicSystem({ setSelectedObject }) {
   const groupRef = useRef()
+  const orbitRefs = useRef([])
+  const orbitMaterialRefs = useRef([])
+  const { clock } = useThree()
+  
+  // Create orbit points for each job
+  const orbits = useMemo(() => {
+    return jobData.map((job, index) => {
+      const radius = 40 // Same as in the planet positioning
+      const curve = new THREE.EllipseCurve(
+        0, 0,            // center x, y
+        radius, radius,  // xRadius, yRadius
+        0, 2 * Math.PI,  // startAngle, endAngle
+        false,           // clockwise
+        0                // rotation
+      )
+      
+      // Get points from curve
+      const points = curve.getPoints(100)
+      // Convert to 3D points (in XZ plane)
+      const positions = new Float32Array(
+        points.flatMap(point => [point.x, 0, point.y])
+      )
+      
+      return {
+        positions,
+        color: languageColors[job.languages[0]] || '#ffffff',
+        dashRatio: 0.5 + (index * 0.1) % 0.3, // Vary the dash pattern
+        width: 0.05 + (index * 0.01) % 0.1    // Vary the line width
+      }
+    })
+  }, [])
 
+  // Set up refs arrays for orbits
+  useEffect(() => {
+    orbitRefs.current = Array(jobData.length).fill().map(() => React.createRef())
+    orbitMaterialRefs.current = Array(jobData.length).fill().map(() => React.createRef())
+  }, [])
+
+  // Animation
   useFrame((state) => {
     if (groupRef.current) {
-      groupRef.current.rotation.y += 0.0005
+      groupRef.current.rotation.y += 0.001
     }
+    
+    // Animate orbit trails
+    orbitMaterialRefs.current.forEach((ref, index) => {
+      if (ref.current) {
+        // Animate dash offset for moving dashes
+        ref.current.dashOffset = clock.getElapsedTime() * (0.05 + index * 0.01)
+      }
+    })
   })
-
-  const allSkills = [...new Set(jobData.flatMap(job => job.languages || []))]
-  const allAchievements = jobData.flatMap(job => job.achievements || [])
-
-  console.log('CosmicSystem - allSkills:', allSkills)
-  console.log('CosmicSystem - allAchievements:', allAchievements)
 
   return (
     <group ref={groupRef}>
       <Sun position={[0, 0, 0]} />
-      <SkillsAsteroidBelt skills={allSkills} radius={25} />
-      <AchievementComets achievements={allAchievements} />
+      
+      {/* Orbit Trails */}
+      {orbits.map((orbit, index) => (
+        <mesh key={`orbit-${index}`}>
+          <meshLine ref={orbitRefs.current[index]}>
+            <bufferGeometry>
+              <bufferAttribute
+                attach="attributes-position"
+                count={orbit.positions.length / 3}
+                array={orbit.positions}
+                itemSize={3}
+              />
+            </bufferGeometry>
+          </meshLine>
+          <meshLineMaterial
+            ref={orbitMaterialRefs.current[index]}
+            transparent
+            depthTest={false}
+            lineWidth={orbit.width}
+            color={new THREE.Color(orbit.color)}
+            dashArray={0.1}
+            dashRatio={orbit.dashRatio}
+            dashOffset={0}
+            opacity={0.7}
+          />
+        </mesh>
+      ))}
+      
+      {/* Planets */}
       {jobData.map((job, index) => {
-        if (!job) {
-          console.error('CosmicSystem - Invalid job data:', job)
-          return null
-        }
-        const primaryLanguage = job.languages && job.languages.length > 0 ? job.languages[0] : 'Unknown'
+        const primaryLanguage = job.languages[0]
         const color = languageColors[primaryLanguage] || '#ffffff'
-        console.log(`CosmicSystem - Rendering JobPlanet for ${job.company}`)
         return (
           <JobPlanet
             key={job.company}
             job={job}
             color={color}
             position={[
-              Math.cos(index * (Math.PI * 2 / jobData.length)) * 50,
+              Math.cos(index * (Math.PI * 2 / jobData.length)) * 40,
               0,
-              Math.sin(index * (Math.PI * 2 / jobData.length)) * 50
+              Math.sin(index * (Math.PI * 2 / jobData.length)) * 40
             ]}
             setSelectedObject={setSelectedObject}
           />

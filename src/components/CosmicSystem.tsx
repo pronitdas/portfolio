@@ -1,11 +1,31 @@
 'use client'
 
-import { useRef } from 'react'
+import React, { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { JobPlanet } from './job-planet'
-import { Sun } from './sun'
+import * as THREE from 'three'
+import { JobPlanet } from './JobPlanet'
+import { Sun } from './Sun'
 
-const languageColors = {
+// Define the JobData type (consider moving to a central types file)
+interface JobData {
+  company: string
+  position: string
+  period: string
+  projects: Array<{
+    name: string
+    description: string
+    technologies: string[]
+  }>
+  languages: string[]
+  achievements: string[]
+}
+
+// Define languageColors type
+interface LanguageColors {
+  [key: string]: string;
+}
+
+const languageColors: LanguageColors = {
   JavaScript: '#f7df1e',
   Python: '#3776ab',
   Java: '#007396',
@@ -28,7 +48,8 @@ const languageColors = {
   Perl: '#39457e',
 }
 
-const jobData = [
+// Use JobData type for jobData array
+const jobData: JobData[] = [
   {
     company: 'Ola',
     position: 'SDE 3',
@@ -171,8 +192,13 @@ const jobData = [
   }
 ]
 
-export function CosmicSystem({ setSelectedObject }) {
-  const groupRef = useRef()
+// Define props type
+interface CosmicSystemProps {
+  setSelectedObject: (job: JobData | null) => void;
+}
+
+export function CosmicSystem({ setSelectedObject }: CosmicSystemProps): React.ReactElement {
+  const groupRef = useRef<THREE.Group>(null)
 
   useFrame((state) => {
     if (groupRef.current) {
@@ -186,15 +212,20 @@ export function CosmicSystem({ setSelectedObject }) {
       {jobData.map((job, index) => {
         const primaryLanguage = job.languages[0]
         const color = languageColors[primaryLanguage] || '#ffffff'
+        const orbitRadius = 40 + (index * 5) // Increasing radius for each job
+        const orbitSpeed = 0.001 / (index + 1) // Slower speed for outer orbits
+        
         return (
           <JobPlanet
             key={job.company}
             job={job}
             color={color}
+            orbitRadius={orbitRadius}
+            orbitSpeed={orbitSpeed}
             position={[
-              Math.cos(index * (Math.PI * 2 / jobData.length)) * 40,
+              Math.cos(index * (Math.PI * 2 / jobData.length)) * orbitRadius,
               0,
-              Math.sin(index * (Math.PI * 2 / jobData.length)) * 40
+              Math.sin(index * (Math.PI * 2 / jobData.length)) * orbitRadius
             ]}
             setSelectedObject={setSelectedObject}
           />
@@ -202,5 +233,4 @@ export function CosmicSystem({ setSelectedObject }) {
       })}
     </group>
   )
-}
-
+} 
